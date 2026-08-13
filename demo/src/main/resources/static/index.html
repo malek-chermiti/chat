@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Chat WebSocket Simple</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f9; }
+        .chat-container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        #messages { height: 300px; border: 1px solid #ccc; overflow-y: scroll; padding: 10px; margin-bottom: 10px; background: #fafafa; border-radius: 4px; }
+        .message { margin-bottom: 8px; }
+        .message span.sender { font-weight: bold; color: #007bff; }
+        .controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        input, button { padding: 10px; font-size: 14px; }
+        input#sender { width: 120px; }
+        input#content { flex: 1; }
+        button { background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button#disconnect { background: #dc3545; }
+        button#disconnect:hover { background: #bd2130; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <h2>💬 Chat en direct</h2>
+
+    <div class="controls">
+        <input type="text" id="sender" placeholder="Ton nom" value="Anonyme">
+        <button id="connect" onclick="connect()">Ouvrir le chat</button>
+        <button id="disconnect" onclick="disconnect()" disabled style="display:none;">Fermer</button>
+    </div>
+
+    <div id="messages"></div>
+
+    <div class="controls">
+        <input type="text" id="content" placeholder="Écris ton message..." disabled>
+        <button id="send" onclick="sendMessage()" disabled>Envoyer</button>
+    </div>
+</div>
+
+<script>
+    var stompClient = null;
+
+    function setConnected(connected) {
+        document.getElementById('connect').disabled = connected;
+        document.getElementById('connect').style.display = connected ? 'none' : 'inline-block';
+        document.getElementById('disconnect').disabled = !connected;
+        document.getElementById('disconnect').style.display = connected ? 'inline-block' : 'none';
+        document.getElementById('content').disabled = !connected;
+        document.getElementById('send').disabled = !connected;
+        document.getElementById('sender').disabled = connected;
+    }
+
+    function connect() {
+        var senderName = document.getElementById('sender').value.trim();
+        if (!senderName) {
+            alert("Entre ton nom d'abord !");
+            return;
+        }
+
+        var socket = new SockJS('http://localhost:8080/ws-chat');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function (frame) {
+            setConnected(true);
+            console.log('Connecté : ' + frame);
+
+            stompClient.subscribe('/topic/messages', function (messageOutput) {
+                showMessage(JSON.parse(messageOutput.body));
+            });
+        }, function(error) {
+            alert("Erreur de connexion au serveur : assure-toi que ton application Spring Boot est bien lancée !");
+            console.log(error);
+        });
+    }
+
+    function disconnect() {
+        if (stompClient !== null) {
+            stompClient.disconnect();
+        }
+        setConnected(false);
+        console.log("Déconnecté");
+    }
+
+    function sendMessage() {
+        var sender = document.getElementById('sender').value;
+        var content = document.getElementById('content').value;
+
+        if (!content.trim()) return;
+
+        stompClient.send('/app/chat', {}, JSON.stringify({
+            sender: sender,
+            content: content
+        }));
+
+        document.getElementById('content').value = '';
+    }
+
+    function showMessage(message) {
+        var messagesDiv = document.getElementById('messages');
+        var messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+        messageElement.innerHTML = '<span class="sender">' + message.sender + '</span> : ' + message.content;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+</script>
+
+</body>
+</html>
